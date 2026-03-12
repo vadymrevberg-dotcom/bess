@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import requests
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
@@ -11,7 +12,8 @@ from src.report import generate_pdf_report
 from src.load_profile import load_consumption_profile
 
 # --- ИНФРАСТРУКТУРА ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "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") 
+# ВНИМАНИЕ: Замени свой засвеченный ключ на новый в переменных окружения!
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") 
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 CSV_PATH = "data/output.csv"
@@ -24,6 +26,26 @@ PV_PROFILE = pd.Series(
 )
 
 st.set_page_config(page_title="Niezależny Audytor OZE", layout="centered", page_icon="⚡")
+
+# --- L2 ADMIN: EXEKUCJA DANYCH ---
+st.sidebar.subheader("🔒 Admin: Zabezpieczenie Aktywów")
+st.sidebar.markdown("Pobierz stare dane przed resetem serwera.")
+if st.sidebar.button("Pobierz lokalne CSV"):
+    if os.path.exists("data/beta_testers.csv"):
+        with open("data/beta_testers.csv", "rb") as f:
+            st.sidebar.download_button("Pobierz e-maile (CSV)", f, "beta_testers_backup.csv")
+    else:
+        st.sidebar.error("Brak pliku beta_testers.csv")
+        
+    if os.path.exists("data/oferty_raport.csv"):
+        with open("data/oferty_raport.csv", "rb") as f2:
+            st.sidebar.download_button("Pobierz oferty (CSV)", f2, "oferty_raport_backup.csv")
+
+# ==========================================
+# TELEGRAM KONFIGURACJA (WPISZ SWOJE DANE!)
+# ==========================================
+TG_TOKEN = "8334360452:AAFv2i7aGCgSV-QQ_nFYPxzSZyaxsla_CkQ"  # np. "123456789:ABCdefGHIjklmNOPqrstUVWxyz"
+TG_CHAT_ID = "765038933"           # np. "123456789"
 
 @st.cache_data
 def load_data():
@@ -47,7 +69,6 @@ except FileNotFoundError:
 st.title("⚡ Niezależny Ekspert OZE")
 st.markdown("Weryfikujemy rynek. Sprawdź, czy Twoja oferta jest uczciwa, lub wylicz od zera, czego potrzebujesz, aby nie tracić na taryfach dynamicznych.")
 
-# --- СИСТЕМА ВКЛАДОК ---
 tab1, tab2 = st.tabs(["🕵️‍♂️ Sprawdź Ofertę (Weryfikator)", "🤖 Kalkulator Strat (Od zera)"])
 
 # ==========================================================
@@ -77,19 +98,17 @@ with tab1:
             - Proponowany sprzęt: {oferta_sprzet}
 
             TWARDE REGUŁY RYNKOWE W POLSCE (MARZEC 2026):
-            - Średnia uczciwa cena PV (z montażem): 4000 - 5500 PLN brutto za 1 kWp. Ceny poniżej 3500 PLN oznaczają ukryte koszty lub drastyczne cięcie na jakości podzespołów i zabezpieczeń.
-            - Średnia uczciwa cena magazynu (LiFePO4 + BMS): 1500 - 2500 PLN brutto za 1 kWh (w zależności od producenta).
-            - Sprzęt Premium / Inteligentny (najwyższa jakość, świetne EMS pod taryfy dynamiczne): Huawei (seria LUNA), BYD, Fronius, SolarEdge, Victron.
-            - Sprzęt Solidny Standard (dobry stosunek jakości do ceny): Deye, FoxESS, SolaX, Pylontech.
+            - Średnia uczciwa cena PV (z montażem): 4000 - 5500 PLN brutto za 1 kWp. 
+            - UWAGA: Cena 3500 - 4000 PLN za 1 kWp może oznaczać agresywną optymalizację kosztów firmy, ale przy dobrym sprzęcie JEST akceptowalna (nie odrzucaj z automatu). Dopiero ceny poniżej 3500 PLN oznaczają drastyczne cięcie na jakości.
+            - Średnia uczciwa cena magazynu (LiFePO4 + BMS): 1500 - 2500 PLN brutto za 1 kWh.
+            - Sprzęt Premium: Huawei, BYD, Fronius, SolarEdge, Victron.
+            - Sprzęt Standard: Deye, FoxESS, SolaX, Pylontech.
             - Sprzęt Budżetowy: Growatt, Sofar, GoodWe.
 
-            Kontekst 2026: Taryfy dynamiczne (RCE) mają ogromne wahania (nawet do niemal 1000 PLN/MWh w zimowych szczytach wieczornych). Dobry magazyn energii z EMS to teraz konieczność, nie luksus.
-
             Zadanie:
-            1. Oceń uczciwość ceny całkowitej (Zawyżona? Zaniżona? Uczciwa?). Pokaż matematykę na podstawie reguł 2026.
-            2. Oceń klasę sprzętu (czy instalator nie sprzedaje budżetowego chińczyka w cenie premium?).
-            3. Daj konkretną, inżynieryjną radę: "Podpisz", "Negocjuj kwotę o X" lub "Odrzuć ofertę".
-            Bądź bezpośredni, profesjonalny i surowy wobec naciągaczy.
+            1. Oceń uczciwość ceny (bądź elastyczny na korzyść klienta, jeśli cena jest niska, ale matematyka się spina).
+            2. Oceń klasę sprzętu.
+            3. Daj inżynieryjną radę: "Podpisz", "Negocjuj" lub "Odrzuć ofertę".
             """
             try:
                 response = ai_client.chat.completions.create(
@@ -100,10 +119,17 @@ with tab1:
                 st.info("💡 **Werdykt:**")
                 st.markdown(response.choices[0].message.content)
                 
-                # Zbieranie danych o audytach (bez sprzedawania!)
+                # Zapis lokalny
                 with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
                     f.write(f"{oferta_cena},{oferta_pv},{oferta_bess},{oferta_sprzet}\n")
-                    
+                
+                # WYSYŁKA DO TELEGRAM
+                tg_msg = f"🕵️‍♂️ ROAST OFERTY:\nCena: {oferta_cena} PLN\nPV: {oferta_pv} kWp\nBESS: {oferta_bess} kWh\nSprzęt: {oferta_sprzet}"
+                try:
+                    requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT_ID, "text": tg_msg}, timeout=3)
+                except Exception:
+                    pass
+
             except Exception as e:
                 st.error(f"Błąd analizy: {e}")
 
@@ -155,7 +181,6 @@ with tab2:
             try:
                 consumption = load_consumption_profile(profile_name=profile_name, annual_kwh=annual_kwh).loc[day_prices.index]
             except Exception as e:
-                # Ochrona w razie braku G12
                 consumption = load_consumption_profile(profile_name="G11", annual_kwh=annual_kwh).loc[day_prices.index]
 
             pv_generation = PV_PROFILE * pv_kwp * PV_KWH_PER_KWP_DAY
@@ -214,7 +239,6 @@ with tab2:
         contact_email = st.text_input("Twój e-mail:")
         if st.button("Generuj PDF i pomóż ulepszać system"):
             if "@" in contact_email and len(contact_email) > 5:
-                # --- TUTAJ GENERUJEMY PDF ---
                 chart_data = {
                     "hours": list(range(24)),
                     "pv_kw": f['pv_generation'].tolist(),
@@ -234,8 +258,16 @@ with tab2:
                 with open(output_pdf, "rb") as file:
                     st.download_button("📥 Pobierz Audyt PDF", file, file_name="Audyt_ENTSOE.pdf", mime="application/pdf")
                 
+                # Zapis lokalny
                 with open("data/beta_testers.csv", "a", encoding="utf-8") as file_csv:
                     file_csv.write(f"{miasto},{p['pv_kwp']},{p['battery_kwh']},{contact_email}\n")
+
+                # WYSYŁKA DO TELEGRAM
+                tg_msg_lead = f"⚡ NOWY LEAD!\nMiasto: {miasto}\nPV: {p['pv_kwp']} kWp\nBESS: {p['battery_kwh']} kWh\nEmail: {contact_email}"
+                try:
+                    requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT_ID, "text": tg_msg_lead}, timeout=3)
+                except Exception:
+                    pass
                 
                 st.success("✅ Raport wygenerowany! Dziękujemy za pomoc w kalibracji.")
             else:
