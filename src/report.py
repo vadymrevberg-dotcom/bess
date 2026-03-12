@@ -107,7 +107,7 @@ def generate_pdf_report(
     plt.close()
     
     # Wrzucamy grafikę na PDF (Strona 1, po lewej stronie)
-    c.drawImage("temp_chart.png", 1 * cm, 7 * cm, width=12 * cm, preserveAspectRatio=True)
+    c.drawImage("temp_chart.png", 1 * cm, 2 * cm, width=12 * cm, preserveAspectRatio=True)
 
     # --- BŁOK FINANSÓW (Po prawej stronie wykresu) ---
     box_x = 13.5 * cm
@@ -166,7 +166,7 @@ def generate_pdf_report(
 
     c.setFillColorRGB(0.8, 0.1, 0.1) 
     c.setFont(FONT_BOLD, 12)
-    c.drawString(2 * cm, height - 4.5 * cm, "WERDYKT AI (GOTOWE ARGUMENTY DLA INSTALATORA):")
+    c.drawString(2 * cm, height - 4.5 * cm, "WERDYKT (GOTOWE ARGUMENTY DLA INSTALATORA):")
     
     c.setFillColorRGB(0, 0, 0)
     c.setFont(FONT_REGULAR, 11)
