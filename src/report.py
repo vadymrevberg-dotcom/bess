@@ -50,7 +50,7 @@ def generate_pdf_report(
     # --- ZAŁOŻENIA / NAGŁÓWEK ---
     c.setFont(FONT_BOLD, 22)
     c.setFillColorRGB(0.1, 0.2, 0.5)
-    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI: FOTOWOLTAIKA + BESS")
+    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI")
     
     c.setFont(FONT_REGULAR, 10)
     c.setFillColorRGB(0.3, 0.3, 0.3)
@@ -106,8 +106,9 @@ def generate_pdf_report(
     plt.savefig("temp_chart.png", dpi=150, bbox_inches='tight')
     plt.close()
     
-    # Wrzucamy grafikę na PDF (Strona 1, po lewej stronie)
-    c.drawImage("temp_chart.png", 1 * cm, 2 * cm, width=12 * cm, preserveAspectRatio=True)
+    
+   
+    c.drawImage("temp_chart.png", 1 * cm, 7 * cm, width=12 * cm, height=14 * cm, preserveAspectRatio=True)
 
     # --- BŁOK FINANSÓW (Po prawej stronie wykresu) ---
     box_x = 13.5 * cm
