@@ -134,16 +134,18 @@ with tab1:
                 else:
                     zasady = "Cena uczciwa to: PV (3000-3800 PLN/kWp). Ceny powyżej 4000 PLN/kWp dla czystej instalacji bez magazynu w 2026 roku są mocno zawyżone!"
 
+                # L3: AI generuje pełny, twardy raport
                 roast_prompt = f"""
-                Jesteś analitykiem. Klient otrzymał ofertę:
-                Cena całkowita: {oferta_cena} PLN brutto, Fotowoltaika: {oferta_pv} kWp, Magazyn: {oferta_bess} kWh, Sprzęt: {oferta_sprzet}.
+                Jesteś niezależnym inżynierem OZE. Klient otrzymał ofertę:
+                Cena: {oferta_cena} PLN, PV: {oferta_pv} kWp, Magazyn: {oferta_bess} kWh, Sprzęt: {oferta_sprzet}.
                 
-                TWARDE REGUŁY: {zasady}
+                Zasady rynkowe: {zasady}
                 
-                ZADANIE: Napisz WSTĘPNĄ diagnozę w formie 2 krótkich punktów (teaser).
-                1. Czy cena mieści się w uczciwych widełkach, czy instalator ukrył potężną marżę (szacunkowo o ile).
-                2. Krótka opinia o podanej marce sprzętu (klasa premium, średnia czy budżetowa).
-                Zabronione jest podawanie szczegółowych wyliczeń matematycznych i okresu zwrotu.
+                ZADANIE: Napisz SZCZEGÓŁOWY, twardy raport do negocjacji (max 4-5 zdań).
+                1. Wylicz dokładną kwotę przepłaty (marży instalatora).
+                2. Rozłóż na czynniki pierwsze jakość sprzętu (czy falownik ma dobre opinie, czy panele są N-Type).
+                3. Daj klientowi 2 konkretne argumenty, których ma użyć w rozmowie z handlowcem, by zbić cenę.
+                Używaj ostrego, inżynieryjnego języka.
                 """
                 
                 try:
@@ -153,16 +155,19 @@ with tab1:
                         temperature=0.2
                     )
 
+                    # Zapisujemy pełny werdykt w sesji dla PDF
+                    pelny_werdykt = response.choices[0].message.content
+                    st.session_state.ai_roast = pelny_werdykt
+
+                    # Ekran: Tylko teaser i generyczna informacja
                     st.warning("⚠️ **WSTĘPNY WERDYKT SYSTEMU:**")
-                    st.markdown(response.choices[0].message.content)
+                    st.markdown("Zidentyfikowaliśmy parametry Twojej oferty. **Znaleźliśmy ukrytą marżę i potencjalne problemy z doborem sprzętu.**")
                     
+                    st.error("🔒 **SZCZEGÓŁOWE ARGUMENTY DO NEGOCJACJI UKRYTE**")
                     st.info(
-                        "🔒 **PEŁNA ANALIZA I WYLICZENIE ZWROTU Z INWESTYCJI UKRYTE**\n\n"
-                        "Zidentyfikowaliśmy parametry Twojej oferty. Ze względu na zmasowane ataki instalatorów, "
-                        "ukrywamy dokładne dane na stronie.\n\n"
-                        "👉 **Przejdź teraz do zakładki '🤖 Kalkulator Strat' (na samej górze).** \n"
-                        "Wpisz swój rachunek za prąd, a system wygeneruje i wyśle Ci na e-mail prywatny raport PDF "
-                        "z argumentami do negocjacji oraz dokładną symulacją zysków na giełdzie."
+                        "Aby zobaczyć dokładną kwotę przepłaty, ocenę falownika i dostać gotowe argumenty do rozmowy z instalatorem, "
+                        "przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\nWpisz tam swój rachunek za prąd, a system wygeneruje pełny raport PDF "
+                        "na Twój adres e-mail."
                     )
                     
                     with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
@@ -301,11 +306,15 @@ with tab2:
                         "expensive_hours": day_prices["price_pln_mwh"].nlargest(3).index.tolist()
                     }
                     
+                    # L3 PATCH: Pobieranie pełnego werdyktu AI do PDF
+                    ai_roast_text = st.session_state.get("ai_roast", "Kalkulacja wykonana od zera. Brak parametrów z oferty instalatora do weryfikacji.")
+                    
                     output_pdf = f"data/audyt_{uuid.uuid4().hex[:8]}.pdf"
                     generate_pdf_report(
                         output_path=output_pdf, client={"city": miasto, "annual_kwh": p['annual_kwh'], "battery_kwh": p['battery_kwh'], "profile": p['profile'], "pv_kwp": p['pv_kwp']},
                         date=target_date, cost_no_battery=f['cost_no_battery_daily'], cost_with_battery=f['cost_with_battery_daily'],
-                        profit_daily=f['profit_battery_daily'], waiting_cost=f['waiting_cost'], chart_data=chart_data
+                        profit_daily=f['profit_battery_daily'], waiting_cost=f['waiting_cost'], chart_data=chart_data,
+                        ai_roast=ai_roast_text
                     )
                     
                     try:
