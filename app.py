@@ -44,8 +44,8 @@ if st.sidebar.button("Pobierz lokalne CSV"):
 # ==========================================
 # TELEGRAM KONFIGURACJA (WPISZ SWOJE DANE!)
 # ==========================================
-TG_TOKEN = "8334360452:AAFv2i7aGCgSV-QQ_nFYPxzSZyaxsla_CkQ"  # np. "123456789:ABCdefGHIjklmNOPqrstUVWxyz"
-TG_CHAT_ID = "765038933"           # np. "123456789"
+TG_TOKEN = os.environ.get("TG_TOKEN")
+TG_CHAT_ID = os.environ.get("TG_CHAT_ID")          # np. "123456789"
 
 @st.cache_data
 def load_data():
