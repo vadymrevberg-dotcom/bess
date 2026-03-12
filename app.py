@@ -87,35 +87,48 @@ with tab1:
         oferta_sprzet = st.text_input("Marki sprzętu (Falownik, Panele):", placeholder="np. FoxESS, panele Jinko 450W")
         
     if st.button("🔍 Prześwietl moją ofertę"):
-        with st.spinner("analizujemy cenniki rynkowe i jakość podzespołów..."):
-            roast_prompt = f"""
+        with st.spinner("Analizujemy cenniki rynkowe i jakość podzespołów..."):
             
+            # L2 PATCH: Dynamiczna wycena zależna od architektury (Hybryda vs On-Grid)
+            if oferta_bess > 0:
+                pv_price_rule = "- Średnia uczciwa cena PV (falownik hybrydowy + montaż + zabezpieczenia): 4000 - 5500 PLN brutto za 1 kWp."
+                bess_rule = "- Średnia uczciwa cena magazynu (LiFePO4 + BMS): 1500 - 2500 PLN brutto za 1 kWh."
+                system_type = "Instalacja Hybrydowa (PV + Magazyn)"
+            else:
+                pv_price_rule = "- Średnia uczciwa cena PV (zwykły falownik sieciowy/stringowy + montaż): 3000 - 3800 PLN brutto za 1 kWp. UWAGA: Ceny powyżej 4000 PLN/kWp dla czystej instalacji bez magazynu w 2026 roku są mocno zawyżone!"
+                bess_rule = "- Klient nie wycenia magazynu energii (0 kWh)."
+                system_type = "Zwykła Instalacja PV (On-Grid, bez magazynu)"
+
+            roast_prompt = f"""
             Jesteś niezależnym inżynierem OZE w Polsce, chroniącym klientów przed naciągaczami.
             Klient dostał ofertę:
-            - Cena: {oferta_cena} PLN brutto
+            - Typ systemu: {system_type}
+            - Cena całkowita: {oferta_cena} PLN brutto
             - Fotowoltaika: {oferta_pv} kWp
             - Magazyn: {oferta_bess} kWh
             - Proponowany sprzęt: {oferta_sprzet}
 
             TWARDE REGUŁY RYNKOWE W POLSCE (MARZEC 2026):
-            - Średnia uczciwa cena PV (z montażem): 4000 - 5500 PLN brutto za 1 kWp. 
-            - UWAGA: Cena 3500 - 4000 PLN za 1 kWp może oznaczać agresywną optymalizację kosztów firmy, ale przy dobrym sprzęcie JEST akceptowalna (nie odrzucaj z automatu). Dopiero ceny poniżej 3500 PLN oznaczają drastyczne cięcie na jakości.
-            - Średnia uczciwa cena magazynu (LiFePO4 + BMS): 1500 - 2500 PLN brutto za 1 kWh.
+            {pv_price_rule}
+            {bess_rule}
+            - UWAGA: Cena może być o 10-15% niższa od średniej, jeśli firma mocno optymalizuje koszty operacyjne (np. mała ekipa lokalna). Nie odrzucaj z automatu tanich ofert, jeśli matematyka się spina z dolnymi widełkami.
             - Sprzęt Premium: Huawei, BYD, Fronius, SolarEdge, Victron.
             - Sprzęt Standard: Deye, FoxESS, SolaX, Pylontech.
             - Sprzęt Budżetowy: Growatt, Sofar, GoodWe.
 
             Zadanie:
-            1. Oceń uczciwość ceny (bądź elastyczny na korzyść klienta, jeśli cena jest niska, ale matematyka się spina).
+            1. Oceń uczciwość ceny całkowitej na podstawie powyższych widełek dla konkretnego typu systemu. Pokaż matematykę.
             2. Oceń klasę sprzętu.
             3. Daj inżynieryjną radę: "Podpisz", "Negocjuj" lub "Odrzuć ofertę".
             """
+            
             try:
                 response = ai_client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": roast_prompt}],
                     temperature=0.2
                 )
+
                 st.info("💡 **Werdykt:**")
                 st.markdown(response.choices[0].message.content)
                 
