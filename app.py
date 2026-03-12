@@ -134,18 +134,20 @@ with tab1:
                 else:
                     zasady = "Cena uczciwa to: PV (3000-3800 PLN/kWp). Ceny powyżej 4000 PLN/kWp dla czystej instalacji bez magazynu w 2026 roku są mocno zawyżone!"
 
-                # L3: AI generuje pełny, twardy raport
+                # L3: AI generuje dwie części oddzielone separatorem |||
                 roast_prompt = f"""
-                Jesteś niezależnym inżynierem OZE. Klient otrzymał ofertę:
-                Cena: {oferta_cena} PLN, PV: {oferta_pv} kWp, Magazyn: {oferta_bess} kWh, Sprzęt: {oferta_sprzet}.
-                
+                Jesteś inżynierem OZE. Klient otrzymał ofertę: {oferta_cena} PLN, {oferta_pv} kWp, BESS: {oferta_bess} kWh, Sprzęt: {oferta_sprzet}.
                 Zasady rynkowe: {zasady}
                 
-                ZADANIE: Napisz SZCZEGÓŁOWY, twardy raport do negocjacji (max 4-5 zdań).
-                1. Wylicz dokładną kwotę przepłaty (marży instalatora).
-                2. Rozłóż na czynniki pierwsze jakość sprzętu (czy falownik ma dobre opinie, czy panele są N-Type).
-                3. Daj klientowi 2 konkretne argumenty, których ma użyć w rozmowie z handlowcem, by zbić cenę.
-                Używaj ostrego, inżynieryjnego języka.
+                ZADANIE: Wygeneruj odpowiedź złożoną z DWÓCH części, oddzielonych dokładnie ciągiem znaków "|||".
+                
+                CZĘŚĆ 1 (Dla ekranu - Teaser):
+                Napisz 2 ostre zdania. Skomentuj konkretnie markę sprzętu (pokaż, że ją znasz) i podaj szacunkową kwotę przepłaty. Zbuduj napięcie.
+                
+                |||
+                
+                CZĘŚĆ 2 (Do pliku PDF - Argumenty):
+                Napisz 4-5 twardych punktów negocjacyjnych. Daj klientowi gotowe, inżynieryjne argumenty do zbicia ceny z instalatorem. Bądź brutalnie szczery.
                 """
                 
                 try:
@@ -155,19 +157,26 @@ with tab1:
                         temperature=0.2
                     )
 
-                    # Zapisujemy pełny werdykt w sesji dla PDF
                     pelny_werdykt = response.choices[0].message.content
-                    st.session_state.ai_roast = pelny_werdykt
+                    
+                    # Dzielenie odpowiedzi
+                    if "|||" in pelny_werdykt:
+                        teaser, pdf_roast = pelny_werdykt.split("|||", 1)
+                    else:
+                        teaser = pelny_werdykt
+                        pdf_roast = pelny_werdykt
 
-                    # Ekran: Tylko teaser i generyczna informacja
+                    # Zapisujemy twarde argumenty dla PDF
+                    st.session_state.ai_roast = pdf_roast.strip()
+
+                    # Ekran: Dynamiczny teaser wygenerowany przez AI
                     st.warning("⚠️ **WSTĘPNY WERDYKT SYSTEMU:**")
-                    st.markdown("Zidentyfikowaliśmy parametry Twojej oferty. **Znaleźliśmy ukrytą marżę i potencjalne problemy z doborem sprzętu.**")
+                    st.markdown(teaser.strip())
                     
                     st.error("🔒 **SZCZEGÓŁOWE ARGUMENTY DO NEGOCJACJI UKRYTE**")
                     st.info(
-                        "Aby zobaczyć dokładną kwotę przepłaty, ocenę falownika i dostać gotowe argumenty do rozmowy z instalatorem, "
-                        "przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\nWpisz tam swój rachunek za prąd, a system wygeneruje pełny raport PDF "
-                        "na Twój adres e-mail."
+                        "Aby otrzymać kompletną strategię negocjacyjną (Cz. 2), przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\n"
+                        "Wpisz tam swój rachunek za prąd, a system wygeneruje 2-stronicowy raport PDF na Twój adres e-mail."
                     )
                     
                     with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
