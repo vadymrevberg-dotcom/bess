@@ -43,10 +43,14 @@ def generate_pdf_report(
     c = canvas.Canvas(output_path, pagesize=A4)
     width, height = A4
 
+    # ==========================================
+    # STRONA 1: GRAFIKI I FINANSE
+    # ==========================================
+    
     # --- ZAŁOŻENIA / NAGŁÓWEK ---
     c.setFont(FONT_BOLD, 22)
     c.setFillColorRGB(0.1, 0.2, 0.5)
-    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI: FOTOWOLTAIKA + MAGAZYN ENERGII")
+    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI: FOTOWOLTAIKA + BESS")
     
     c.setFont(FONT_REGULAR, 10)
     c.setFillColorRGB(0.3, 0.3, 0.3)
@@ -102,10 +106,10 @@ def generate_pdf_report(
     plt.savefig("temp_chart.png", dpi=150, bbox_inches='tight')
     plt.close()
     
-    # Wrzucamy grafikę na PDF 
-    c.drawImage("temp_chart.png", 1 * cm, height - 34 * cm, width=12 * cm, preserveAspectRatio=True)
+    # Wrzucamy grafikę na PDF (Strona 1, po lewej stronie)
+    c.drawImage("temp_chart.png", 1 * cm, 7 * cm, width=12 * cm, preserveAspectRatio=True)
 
-    # --- BŁOK FINANSÓW ---
+    # --- BŁOK FINANSÓW (Po prawej stronie wykresu) ---
     box_x = 13.5 * cm
     c.setFillColorRGB(0.95, 0.95, 0.95)
     c.rect(box_x, height - 12.5 * cm, 6 * cm, 5.5 * cm, stroke=0, fill=1)
@@ -134,37 +138,57 @@ def generate_pdf_report(
     c.setFont(FONT_BOLD, 14)
     c.drawString(box_x + 0.5*cm, height - 14.5 * cm, f"{waiting_cost:.2f} PLN")
 
-    # --- WERDYKT AI DO NEGOCJACJI ---
-    c.setFillColorRGB(0.8, 0.1, 0.1) 
-    c.setFont(FONT_BOLD, 11)
-    c.drawString(2 * cm, 10 * cm, "WERDYKT AI (ARGUMENTY DO NEGOCJACJI Z INSTALATOREM):")
-    
-    c.setFillColorRGB(0, 0, 0)
-    c.setFont(FONT_REGULAR, 10)
-    
-    # Łamanie tekstu
-    wrapped_roast = textwrap.wrap(ai_roast, width=95)
-    y_roast = 9.4 * cm
-    for line in wrapped_roast:
-        c.drawString(2 * cm, y_roast, line)
-        y_roast -= 0.45 * cm
-
-    # --- WNIOSKI ---
+    # --- WNIOSKI ANALITYCZNE (Dół Strony 1) ---
     c.setFillColorRGB(0, 0, 0)
     c.setFont(FONT_BOLD, 12)
-    c.drawString(2 * cm, 5.5 * cm, "Wnioski analityczne:")
+    c.drawString(2 * cm, 6.5 * cm, "Wnioski analityczne do wykresu:")
     c.setFont(FONT_REGULAR, 10)
     
     text = [
-    "1. ZIELONE STREFY na wykresie: Magazyn ładuje się prądem, gdy jest on najtańszy (lub darmowy ze słońca).",
-    "2. CZERWONE STREFY na wykresie: Dom zużywa prąd z magazynu, chroniąc Cię przed najdroższymi godzinami szczytu.",
-    f"3. FINANSE: Każdy miesiąc zwłoki w instalacji to bezpowrotna utrata ok. {abs(round(profit_daily * 30, 0))} PLN.",
-    "4. DANE: Kalkulacja AI oparta na historycznych cenach giełdowych ENTSO-E i Twoim profilu zużycia."
+    "1. ZIELONE STREFY: Magazyn ładuje się prądem, gdy jest on najtańszy na giełdzie (lub darmowy z PV).",
+    "2. CZERWONE STREFY: Dom zużywa prąd z magazynu, chroniąc Cię przed najdroższymi godzinami szczytu.",
+    f"3. FINANSE: Każdy miesiąc zwłoki w instalacji to utrata ok. {abs(round(profit_daily * 30, 0))} PLN na rzecz elektrowni.",
+    "4. DANE: Kalkulacja oparta na historycznych cenach giełdowych ENTSO-E i Twoim profilu zużycia."
     ]
-    y_pos = 4.8 * cm
+    y_pos = 5.8 * cm
     for line in text:
         c.drawString(2.5 * cm, y_pos, line)
         y_pos -= 0.6 * cm
+
+    # ==========================================
+    # STRONA 2: ARGUMENTY DO NEGOCJACJI
+    # ==========================================
+    c.showPage()  # <--- MAGIA: ROZPOCZĘCIE NOWEJ STRONY
+
+    c.setFont(FONT_BOLD, 18)
+    c.setFillColorRGB(0.1, 0.2, 0.5)
+    c.drawString(2 * cm, height - 3 * cm, "CZĘŚĆ 2: STRATEGIA NEGOCJACYJNA")
+
+    c.setFillColorRGB(0.8, 0.1, 0.1) 
+    c.setFont(FONT_BOLD, 12)
+    c.drawString(2 * cm, height - 4.5 * cm, "WERDYKT AI (GOTOWE ARGUMENTY DLA INSTALATORA):")
+    
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont(FONT_REGULAR, 11)
+    
+    # Inteligentne łamanie tekstu z zachowaniem akapitów od AI
+    y_roast = height - 5.5 * cm
+    for paragraph in ai_roast.split('\n'):
+        if not paragraph.strip():
+            y_roast -= 0.3 * cm  # Odstęp dla pustych linii
+            continue
+            
+        wrapped_p = textwrap.wrap(paragraph, width=95)
+        for line in wrapped_p:
+            c.drawString(2 * cm, y_roast, line)
+            y_roast -= 0.55 * cm
+            
+        y_roast -= 0.2 * cm # Odstęp po akapicie
+
+    # Stopka na drugiej stronie
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.setFont(FONT_REGULAR, 9)
+    c.drawString(2 * cm, 2 * cm, "System Niezależnego Audytora OZE | Nie sprzedajemy sprzętu, walczymy z ukrytą marżą.")
 
     c.save()
     if os.path.exists("temp_chart.png"):
