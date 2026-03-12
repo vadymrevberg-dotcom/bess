@@ -1,6 +1,7 @@
 # src/report.py
 import os
 import urllib.request
+import textwrap
 import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -36,7 +37,8 @@ def generate_pdf_report(
     cost_with_battery: float,
     profit_daily: float,
     waiting_cost: float,
-    chart_data: dict
+    chart_data: dict,
+    ai_roast: str = "Kalkulacja wykonana od zera. Brak parametrów z oferty instalatora do weryfikacji."
 ):
     c = canvas.Canvas(output_path, pagesize=A4)
     width, height = A4
@@ -44,7 +46,7 @@ def generate_pdf_report(
     # --- ZAŁOŻENIA / NAGŁÓWEK ---
     c.setFont(FONT_BOLD, 22)
     c.setFillColorRGB(0.1, 0.2, 0.5)
-    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI: FOTOWOLTAIKA + MAGAZYN ENERGII")
+    c.drawString(2 * cm, height - 3 * cm, "RAPORT OPŁACALNOŚCI")
     
     c.setFont(FONT_REGULAR, 10)
     c.setFillColorRGB(0.3, 0.3, 0.3)
@@ -132,6 +134,21 @@ def generate_pdf_report(
     c.setFont(FONT_BOLD, 14)
     c.drawString(box_x + 0.5*cm, height - 14.5 * cm, f"{waiting_cost:.2f} PLN")
 
+    # --- WERDYKT AI DO NEGOCJACJI ---
+    c.setFillColorRGB(0.8, 0.1, 0.1) 
+    c.setFont(FONT_BOLD, 11)
+    c.drawString(2 * cm, 10 * cm, "WERDYKT  (ARGUMENTY DO NEGOCJACJI Z INSTALATOREM):")
+    
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont(FONT_REGULAR, 10)
+    
+    # Łamanie tekstu
+    wrapped_roast = textwrap.wrap(ai_roast, width=95)
+    y_roast = 9.4 * cm
+    for line in wrapped_roast:
+        c.drawString(2 * cm, y_roast, line)
+        y_roast -= 0.45 * cm
+
     # --- WNIOSKI ---
     c.setFillColorRGB(0, 0, 0)
     c.setFont(FONT_BOLD, 12)
@@ -142,7 +159,7 @@ def generate_pdf_report(
     "1. ZIELONE STREFY na wykresie: Magazyn ładuje się prądem, gdy jest on najtańszy (lub darmowy ze słońca).",
     "2. CZERWONE STREFY na wykresie: Dom zużywa prąd z magazynu, chroniąc Cię przed najdroższymi godzinami szczytu.",
     f"3. FINANSE: Każdy miesiąc zwłoki w instalacji to bezpowrotna utrata ok. {abs(round(profit_daily * 30, 0))} PLN.",
-    "4. DANE: Kalkulacja AI oparta na historycznych cenach giełdowych ENTSO-E i Twoim profilu zużycia."
+    "4. DANE: Kalkulacja  oparta na historycznych cenach giełdowych ENTSO-E i Twoim profilu zużycia."
     ]
     y_pos = 4.8 * cm
     for line in text:
