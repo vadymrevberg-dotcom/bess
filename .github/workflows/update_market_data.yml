@@ -1,0 +1,32 @@
+name: Daily TGE Market Data Update
+
+on:
+  schedule:
+    - cron: '30 14 * * *' # Запуск каждый день в 14:30 UTC
+  workflow_dispatch: # Позволяет запустить скрипт кнопкой вручную
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas requests
+
+      - name: Run market data updater
+        run: python src/update_market_data.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add data/output.csv
+          git commit -m "Auto-update TGE day-ahead prices" || echo "No changes to commit"
+          git push
