@@ -125,71 +125,80 @@ with tab1:
         else:
             with st.spinner("Skanowanie bazy cen hurtowych i weryfikacja podzespołów..."):
                 
-                # Zapisz w pamięci (Most do Tab 2)
                 st.session_state.pv_from_tab1 = oferta_pv
                 st.session_state.bess_from_tab1 = oferta_bess
 
+                # L3 PATCH: Twarda matematyka w Pythonie, nie w AI!
                 if oferta_bess > 0:
-                    zasady = "Cena uczciwa to: PV (4000-5500 PLN/kWp) + Magazyn (1500-2500 PLN/kWh)."
+                    min_total = (oferta_pv * 4000) + (oferta_bess * 1500)
+                    max_total = (oferta_pv * 5500) + (oferta_bess * 2500)
                 else:
-                    zasady = "Cena uczciwa to: PV (3000-3800 PLN/kWp). Ceny powyżej 4000 PLN/kWp dla czystej instalacji bez magazynu w 2026 roku są mocno zawyżone!"
+                    min_total = oferta_pv * 3000
+                    max_total = oferta_pv * 3800
 
-                # L3: AI generuje dwie części oddzielone separatorem |||
+                # Obliczanie statusu oferty (Python się nie myli)
+                if oferta_cena > max_total:
+                    stan_oferty = f"OFERTA ZAWYŻONA. Klient przepłaca od {oferta_cena - max_total:.0f} do {oferta_cena - min_total:.0f} PLN w stosunku do realnych cen hurtowych i uczciwej marży."
+                elif oferta_cena < min_total:
+                    stan_oferty = f"OFERTA PODEJRZANIE TANIA. Cena jest o {min_total - oferta_cena:.0f} PLN niższa od rynkowego minimum. Gigantyczne ryzyko cięcia kosztów na zabezpieczeniach (PPOŻ), okablowaniu lub ukrytych kosztów w umowie."
+                else:
+                    stan_oferty = "OFERTA UCZCIWA. Cena mieści się w rynkowych widełkach dla tego roku."
+
+                # L3: AI jest tylko procesorem lingwistycznym i ekspertem od sprzętu. Zwraca czysty JSON.
                 roast_prompt = f"""
-                Jesteś inżynierem OZE. Klient otrzymał ofertę: {oferta_cena} PLN, {oferta_pv} kWp, BESS: {oferta_bess} kWh, Sprzęt: {oferta_sprzet}.
-                Zasady rynkowe: {zasady}
+                Jesteś zimnym, analitycznym inżynierem audytorem OZE. Brak empatii, brak języka sprzedażowego ("warto zastanowić się"). Tylko brutalne, techniczne fakty.
                 
-                ZADANIE: Wygeneruj odpowiedź złożoną z DWÓCH części, oddzielonych dokładnie ciągiem znaków "|||".
+                Dane wejściowe:
+                Sprzęt zaproponowany klientowi: {oferta_sprzet}
                 
-                CZĘŚĆ 1 (Dla ekranu - Teaser):
-                Napisz 2 ostre zdania. Skomentuj konkretnie markę sprzętu (pokaż, że ją znasz) i podaj szacunkową kwotę przepłaty. Zbuduj napięcie.
+                Wynik matematycznej weryfikacji cen (TWARDE DANE - ZABRANIAM CI ICH ZMIENIAĆ LUB PRZELICZAĆ):
+                {stan_oferty}
                 
-                |||
+                ZADANIE: Wygeneruj odpowiedź w formacie JSON zawierającą dokładnie dwa klucze: "teaser" oraz "pdf_roast".
                 
-                CZĘŚĆ 2 (Do pliku PDF - Argumenty):
-                Napisz 4-5 twardych punktów negocjacyjnych. Daj klientowi gotowe, inżynieryjne argumenty do zbicia ceny z instalatorem. Bądź brutalnie szczery.
+                "teaser": Krótkie 2 zdania. Oceń klasę podanego sprzętu (np. premium, średnia, budżetowa) i zacytuj wynik matematyczny. Ton: suchy raport. 
+                Przykład: "Zaproponowany sprzęt to klasa średnia. System wykrył podejrzenie zawyżonej marży na kwotę około X PLN."
+                
+                "pdf_roast": 4 twarde punkty (bullet points) z argumentami do negocjacji/weryfikacji dla klienta. Uderz w wady sprzętu, wymuś sprawdzenie grubości kabli, zabezpieczeń. Używaj inżynieryjnego żargonu.
                 """
                 
                 try:
                     response = ai_client.chat.completions.create(
                         model="gpt-4o-mini",
+                        response_format={ "type": "json_object" },
                         messages=[{"role": "user", "content": roast_prompt}],
-                        temperature=0.2
+                        temperature=0.1
                     )
 
-                    pelny_werdykt = response.choices[0].message.content
-                    
-                    # Dzielenie odpowiedzi
-                    if "|||" in pelny_werdykt:
-                        teaser, pdf_roast = pelny_werdykt.split("|||", 1)
-                    else:
-                        teaser = pelny_werdykt
-                        pdf_roast = pelny_werdykt
+                    # Parsowanie JSON z AI
+                    wynik_json = json.loads(response.choices[0].message.content)
+                    teaser = wynik_json.get("teaser", "Zidentyfikowano sprzęt. Analiza gotowa.")
+                    pdf_roast = wynik_json.get("pdf_roast", "Brak szczegółów sprzętowych.")
 
                     # Zapisujemy twarde argumenty dla PDF
-                    st.session_state.ai_roast = pdf_roast.strip()
+                    st.session_state.ai_roast = pdf_roast
 
-                    # Ekran: Dynamiczny teaser wygenerowany przez AI
+                    # Ekran: Suchy, analityczny teaser
                     st.warning("⚠️ **WSTĘPNY WERDYKT SYSTEMU:**")
-                    st.markdown(teaser.strip())
+                    st.markdown(teaser)
                     
-                    st.error("🔒 **SZCZEGÓŁOWE ARGUMENTY DO NEGOCJACJI UKRYTE**")
+                    st.error("🔒 **SZCZEGÓŁOWY RAPORT I ARGUMENTY DO NEGOCJACJI UKRYTE**")
                     st.info(
-                        "Aby otrzymać kompletną strategię negocjacyjną (Cz. 2), przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\n"
-                        "Wpisz tam swój rachunek za prąd, a system wygeneruje 2-stronicowy raport PDF na Twój adres e-mail."
+                        "Aby otrzymać pełną, inżynieryjną analizę błędów w tej ofercie, przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\n"
+                        "Wpisz swój rachunek za prąd, a system wygeneruje twardy raport PDF na Twój adres e-mail."
                     )
                     
                     with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
                         f.write(f"{oferta_cena},{oferta_pv},{oferta_bess},{oferta_sprzet}\n")
                     
-                    tg_msg = f"🕵️‍♂️ ROAST OFERTY:\nCena: {oferta_cena} PLN\nPV: {oferta_pv} kWp\nBESS: {oferta_bess} kWh\nSprzęt: {oferta_sprzet}"
+                    tg_msg = f"🕵️‍♂️ ROAST OFERTY:\nCena: {oferta_cena} PLN\nPV: {oferta_pv} kWp\nBESS: {oferta_bess} kWh\nSprzęt: {oferta_sprzet}\nWerdykt: {stan_oferty}"
                     try:
                         requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT_ID, "text": tg_msg}, timeout=3)
                     except Exception:
                         pass
 
                 except Exception as e:
-                    st.error(f"Błąd analizy: {e}")
+                    st.error(f"Błąd analizy AI. Sprawdź logi serwera: {e}")
 
 # ==========================================================
 # TAB 2: КАЛЬКУЛЯТОР С НУЛЯ (HARD GATE - SMTP PDF)
