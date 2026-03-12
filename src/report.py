@@ -1,5 +1,6 @@
 # src/report.py
 import os
+import urllib.request
 import matplotlib.pyplot as plt
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -7,12 +8,23 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+# L2 PATCH: Automatyczne pobieranie fontów z polskimi znakami (Streamlit Cloud proof)
+FONT_REGULAR = 'Roboto-Regular'
+FONT_BOLD = 'Roboto-Bold'
+
+def setup_fonts():
+    if not os.path.exists('Roboto-Regular.ttf'):
+        urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf", "Roboto-Regular.ttf")
+    if not os.path.exists('Roboto-Bold.ttf'):
+        urllib.request.urlretrieve("https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf", "Roboto-Bold.ttf")
+    
+    pdfmetrics.registerFont(TTFont(FONT_REGULAR, 'Roboto-Regular.ttf'))
+    pdfmetrics.registerFont(TTFont(FONT_BOLD, 'Roboto-Bold.ttf'))
+
 try:
-    pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
-    pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
-    FONT_REGULAR = 'Arial'
-    FONT_BOLD = 'Arial-Bold'
-except Exception:
+    setup_fonts()
+except Exception as e:
+    print(f"Błąd ładowania fontów: {e}")
     FONT_REGULAR = 'Helvetica'
     FONT_BOLD = 'Helvetica-Bold'
 
@@ -82,18 +94,16 @@ def generate_pdf_report(
     lines_1, labels_1 = ax2.get_legend_handles_labels()
     lines_2, labels_2 = ax3.get_legend_handles_labels()
     ax2.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, fontsize=8)
-    ax2.set_title('Jak magazyn chroni Cię przed drogim prądem (tło: ładowanie/rozładowanie)', fontsize=10, fontweight='bold')
-
-   
+    ax2.set_title('Jak magazyn chroni Cię przed drogim prądem', fontsize=10, fontweight='bold')
 
     plt.tight_layout()
     plt.savefig("temp_chart.png", dpi=150, bbox_inches='tight')
     plt.close()
     
-    # Wrzucamy grafikę na PDF (bardziej w lewo i szerzej)
+    # Wrzucamy grafikę na PDF 
     c.drawImage("temp_chart.png", 1 * cm, height - 34 * cm, width=12 * cm, preserveAspectRatio=True)
 
-    # --- BŁOK FINANSÓW (OSZCZĘDNOŚCI I ZWŁOKA) ---
+    # --- BŁOK FINANSÓW ---
     box_x = 13.5 * cm
     c.setFillColorRGB(0.95, 0.95, 0.95)
     c.rect(box_x, height - 12.5 * cm, 6 * cm, 5.5 * cm, stroke=0, fill=1)
@@ -113,7 +123,7 @@ def generate_pdf_report(
     c.setFont(FONT_BOLD, 14)
     c.drawString(box_x + 0.5*cm, height - 11.7 * cm, f"{profit_daily * 30:.2f} PLN")
 
-    # KOSZT ZWŁOKI (podciągnięty wyżej)
+    # KOSZT ZWŁOKI
     c.setFillColorRGB(0.8, 0.1, 0.1) 
     c.rect(box_x, height - 15 * cm, 6 * cm, 2.2 * cm, stroke=0, fill=1)
     c.setFillColorRGB(1, 1, 1) 
@@ -131,7 +141,7 @@ def generate_pdf_report(
     text = [
     "1. ZIELONE STREFY na wykresie: Magazyn ładuje się prądem, gdy jest on najtańszy (lub darmowy ze słońca).",
     "2. CZERWONE STREFY na wykresie: Dom zużywa prąd z magazynu, chroniąc Cię przed najdroższymi godzinami szczytu.",
-    f"3. FINANSE: Każdy miesiąc zwłoki w instalacji to bezpowrotna utrata ok. {abs(round(profit_daily * 30, 0))} PLN na rzecz elektrowni.",
+    f"3. FINANSE: Każdy miesiąc zwłoki w instalacji to bezpowrotna utrata ok. {abs(round(profit_daily * 30, 0))} PLN.",
     "4. DANE: Kalkulacja AI oparta na historycznych cenach giełdowych ENTSO-E i Twoim profilu zużycia."
     ]
     y_pos = 4.8 * cm
