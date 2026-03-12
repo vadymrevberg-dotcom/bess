@@ -12,7 +12,6 @@ from src.report import generate_pdf_report
 from src.load_profile import load_consumption_profile
 
 # --- ИНФРАСТРУКТУРА ---
-# ВНИМАНИЕ: Замени свой засвеченный ключ на новый в переменных окружения!
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") 
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -42,10 +41,10 @@ if st.sidebar.button("Pobierz lokalne CSV"):
             st.sidebar.download_button("Pobierz oferty (CSV)", f2, "oferty_raport_backup.csv")
 
 # ==========================================
-# TELEGRAM KONFIGURACJA (WPISZ SWOJE DANE!)
+# TELEGRAM KONFIGURACJA 
 # ==========================================
 TG_TOKEN = os.environ.get("TG_TOKEN")
-TG_CHAT_ID = os.environ.get("TG_CHAT_ID")          # np. "123456789"
+TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 
 @st.cache_data
 def load_data():
@@ -89,7 +88,10 @@ with tab1:
     if st.button("🔍 Prześwietl moją ofertę"):
         with st.spinner("Analizujemy cenniki rynkowe i jakość podzespołów..."):
             
-            # L2 PATCH: Dynamiczna wycena zależna od architektury (Hybryda vs On-Grid)
+            # Zapisz w pamięci (L2: Przerzucenie danych do Tab 2)
+            st.session_state.pv_from_tab1 = oferta_pv
+            st.session_state.bess_from_tab1 = oferta_bess
+
             if oferta_bess > 0:
                 pv_price_rule = "- Średnia uczciwa cena PV (falownik hybrydowy + montaż + zabezpieczenia): 4000 - 5500 PLN brutto za 1 kWp."
                 bess_rule = "- Średnia uczciwa cena magazynu (LiFePO4 + BMS): 1500 - 2500 PLN brutto za 1 kWh."
@@ -132,11 +134,12 @@ with tab1:
                 st.info("💡 **Werdykt:**")
                 st.markdown(response.choices[0].message.content)
                 
-                # Zapis lokalny
+                # Hak konwersyjny - zmuszamy do przejścia do Tab 2
+                st.warning("⚠️ **UWAGA:** Sam koszt sprzętu to dopiero połowa sukcesu. Przejdź teraz do zakładki **🤖 Kalkulator Strat (Od zera)** na górze, wpisz swój rachunek za prąd i pobierz raport PDF. Sprawdź, czy ta konkretna oferta w ogóle Ci się zwróci na taryfach dynamicznych!")
+                
                 with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
                     f.write(f"{oferta_cena},{oferta_pv},{oferta_bess},{oferta_sprzet}\n")
                 
-                # WYSYŁKA DO TELEGRAM
                 tg_msg = f"🕵️‍♂️ ROAST OFERTY:\nCena: {oferta_cena} PLN\nPV: {oferta_pv} kWp\nBESS: {oferta_bess} kWh\nSprzęt: {oferta_sprzet}"
                 try:
                     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT_ID, "text": tg_msg}, timeout=3)
@@ -157,6 +160,8 @@ with tab2:
     if "financials" not in st.session_state:
         st.session_state.financials = {}
 
+    st.markdown("Oblicz opłacalność inwestycji. **Jeśli sprawdziłeś już swoją ofertę w zakładce obok, system automatycznie podstawi jej parametry (kWp i kWh).**")
+
     col1, col2 = st.columns(2)
     with col1:
         rachunek = st.number_input("Miesięczny rachunek za prąd (PLN):", min_value=100, max_value=5000, value=400, step=50, key="r_calc")
@@ -165,14 +170,22 @@ with tab2:
         ogrzewanie = st.selectbox("Czym ogrzewasz dom?", ["Pompa ciepła", "Kocioł gazowy / Pellet", "Ogrzewanie elektryczne", "Węgiel / Drewno"], key="o_calc")
         dach = st.selectbox("Rodzaj dachu:", ["Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_calc")
 
-    if st.button("🤖 Oblicz moje straty i dobierz sprzęt"):
-        with st.spinner("System pobiera ceny giełdowe ENTSO-E..."):
+    if st.button("🤖 Oblicz opłacalność (ROI)"):
+        with st.spinner("System pobiera ceny giełdowe ENTSO-E i wylicza oszczędności..."):
+            
+            # L2 PATCH: Most pomiędzy zakładkami
+            pv_rule = f"Użyj DOKŁADNIE pv_kwp = {st.session_state.pv_from_tab1}" if "pv_from_tab1" in st.session_state else "Dobierz optymalną moc PV (kWp)"
+            bess_rule = f"Użyj DOKŁADNIE battery_kwh = {st.session_state.bess_from_tab1}" if "bess_from_tab1" in st.session_state else "Dobierz optymalną pojemność magazynu (kWh)"
+
             prompt = f"""
             Jesteś inżynierem OZE. Klient płaci {rachunek} PLN/mc. Ogrzewanie: {ogrzewanie}. 
-            Oszacuj zużycie roczne w kWh. Dobierz optymalną moc PV (kWp) i magazynu (kWh).
+            Oszacuj zużycie roczne w kWh. 
+            {pv_rule}.
+            {bess_rule}.
             Profil: "G12" jeśli pompa ciepła/elektryczne, inaczej "G11".
             ZWRÓĆ TYLKO JSON: {{"annual_kwh": int, "pv_kwp": float, "battery_kwh": float, "profile": string}}
             """
+            
             try:
                 response = ai_client.chat.completions.create(
                     model="gpt-4o-mini",
@@ -234,23 +247,21 @@ with tab2:
         p = st.session_state.ai_params
         f = st.session_state.financials
         
-        st.success(f"**Twój optymalny zestaw:** Fotowoltaika {p['pv_kwp']} kWp + Magazyn {p['battery_kwh']} kWh")
+        st.success(f"**Przeanalizowano system:** Fotowoltaika {p['pv_kwp']} kWp + Magazyn {p['battery_kwh']} kWh")
         col_a, col_b, col_c = st.columns(3)
         col_a.metric("Twój profil", p['profile'])
         col_b.metric("Zysk dzienny z BESS", f"{f['profit_battery_daily']:.2f} PLN")
         col_c.error(f"🔴 KOSZT ZWŁOKI (6 m-cy): {f['waiting_cost']:.2f} PLN")
 
         st.write("---")
-        st.subheader("📥 Pobierz Twój Audyt PDF")
+        st.subheader("📥 Pobierz Pełny Audyt Opłacalności (PDF)")
         st.markdown(
-          "Udostępniamy to narzędzie w 100% za darmo, aby walczyć z dezinformacją na rynku OZE. "
-          "**Nie sprzedajemy instalacji ani nie przekazujemy danych handlowcom.**\n\n"
-          "Podaj e-mail, aby pobrać inżynieryjny PDF. Za kilka dni wyślemy Ci jedną wiadomość z pytaniem: "
-          "*Czy ten raport pomógł Ci uchronić się przed zawyżoną ofertą?*"
+          "Otrzymasz inżynieryjny raport z dokładnymi wykresami. Zobaczysz na własne oczy, ile dni w roku ta instalacja będzie zarabiać na giełdzie. "
+          "**Nie sprzedajemy danych handlowcom.**"
         )
 
         contact_email = st.text_input("Twój e-mail:")
-        if st.button("Generuj PDF i pomóż ulepszać system"):
+        if st.button("Pobierz darmowy PDF z analizą"):
             if "@" in contact_email and len(contact_email) > 5:
                 chart_data = {
                     "hours": list(range(24)),
@@ -271,17 +282,15 @@ with tab2:
                 with open(output_pdf, "rb") as file:
                     st.download_button("📥 Pobierz Audyt PDF", file, file_name="Audyt_ENTSOE.pdf", mime="application/pdf")
                 
-                # Zapis lokalny
                 with open("data/beta_testers.csv", "a", encoding="utf-8") as file_csv:
                     file_csv.write(f"{miasto},{p['pv_kwp']},{p['battery_kwh']},{contact_email}\n")
 
-                # WYSYŁKA DO TELEGRAM
                 tg_msg_lead = f"⚡ NOWY LEAD!\nMiasto: {miasto}\nPV: {p['pv_kwp']} kWp\nBESS: {p['battery_kwh']} kWh\nEmail: {contact_email}"
                 try:
                     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id": TG_CHAT_ID, "text": tg_msg_lead}, timeout=3)
                 except Exception:
                     pass
                 
-                st.success("✅ Raport wygenerowany! Dziękujemy za pomoc w kalibracji.")
+                st.success("✅ Raport wygenerowany! Sprawdź przycisk pobierania poniżej.")
             else:
                 st.error("Wprowadź poprawny adres e-mail.")
