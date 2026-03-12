@@ -105,7 +105,7 @@ st.markdown("*Niezależny projekt inżynieryjny. Nie sprzedajemy paneli, walczym
 tab1, tab2 = st.tabs(["🕵️‍♂️ Sprawdź Ofertę (Weryfikator)", "🤖 Kalkulator Strat (Od zera)"])
 
 # ==========================================================
-# TAB 1: АНАЛИЗАТОР ОФЕРТЫ (TEASER GATING)
+# TAB 1: АНАЛИЗАТОР ОФЕРТЫ (TEASER GATING & JSON)
 # ==========================================================
 with tab1:
     st.subheader("Weryfikator wycen od instalatorów")
@@ -125,10 +125,11 @@ with tab1:
         else:
             with st.spinner("Skanowanie bazy cen hurtowych i weryfikacja podzespołów..."):
                 
+                # Zapisz w pamięci (Most do Tab 2)
                 st.session_state.pv_from_tab1 = oferta_pv
                 st.session_state.bess_from_tab1 = oferta_bess
 
-                # L3 PATCH: Twarda matematyka w Pythonie, nie w AI!
+                # L3: Twarda matematyka w Pythonie
                 if oferta_bess > 0:
                     min_total = (oferta_pv * 4000) + (oferta_bess * 1500)
                     max_total = (oferta_pv * 5500) + (oferta_bess * 2500)
@@ -136,30 +137,24 @@ with tab1:
                     min_total = oferta_pv * 3000
                     max_total = oferta_pv * 3800
 
-                # Obliczanie statusu oferty (Python się nie myli)
                 if oferta_cena > max_total:
                     stan_oferty = f"OFERTA ZAWYŻONA. Klient przepłaca od {oferta_cena - max_total:.0f} do {oferta_cena - min_total:.0f} PLN w stosunku do realnych cen hurtowych i uczciwej marży."
                 elif oferta_cena < min_total:
-                    stan_oferty = f"OFERTA PODEJRZANIE TANIA. Cena jest o {min_total - oferta_cena:.0f} PLN niższa od rynkowego minimum. Gigantyczne ryzyko cięcia kosztów na zabezpieczeniach (PPOŻ), okablowaniu lub ukrytych kosztów w umowie."
+                    stan_oferty = f"OFERTA PODEJRZANIE TANIA. Cena jest o {min_total - oferta_cena:.0f} PLN niższa od rynkowego minimum. Gigantyczne ryzyko cięcia kosztów na zabezpieczeniach."
                 else:
                     stan_oferty = "OFERTA UCZCIWA. Cena mieści się w rynkowych widełkach dla tego roku."
 
-                # L3: AI jest tylko procesorem lingwistycznym i ekspertem od sprzętu. Zwraca czysty JSON.
                 roast_prompt = f"""
-                Jesteś zimnym, analitycznym inżynierem audytorem OZE. Brak empatii, brak języka sprzedażowego ("warto zastanowić się"). Tylko brutalne, techniczne fakty.
+                Jesteś zimnym, analitycznym inżynierem audytorem OZE. Brak empatii, brak języka sprzedażowego. Tylko brutalne, techniczne fakty.
                 
-                Dane wejściowe:
                 Sprzęt zaproponowany klientowi: {oferta_sprzet}
-                
-                Wynik matematycznej weryfikacji cen (TWARDE DANE - ZABRANIAM CI ICH ZMIENIAĆ LUB PRZELICZAĆ):
+                Wynik matematycznej weryfikacji cen (TWARDE DANE - NIE ZMIENIAJ ICH):
                 {stan_oferty}
                 
-                ZADANIE: Wygeneruj odpowiedź w formacie JSON zawierającą dokładnie dwa klucze: "teaser" oraz "pdf_roast".
+                ZADANIE: Wygeneruj odpowiedź w formacie JSON zawierającą dwa klucze: "teaser" oraz "pdf_roast".
                 
-                "teaser": Krótkie 2 zdania. Oceń klasę podanego sprzętu (np. premium, średnia, budżetowa) i zacytuj wynik matematyczny. Ton: suchy raport. 
-                Przykład: "Zaproponowany sprzęt to klasa średnia. System wykrył podejrzenie zawyżonej marży na kwotę około X PLN."
-                
-                "pdf_roast": 4 twarde punkty (bullet points) z argumentami do negocjacji/weryfikacji dla klienta. Uderz w wady sprzętu, wymuś sprawdzenie grubości kabli, zabezpieczeń. Używaj inżynieryjnego żargonu.
+                "teaser": Krótkie 2 zdania. Oceń klasę podanego sprzętu i zacytuj wynik matematyczny. Ton: suchy raport. 
+                "pdf_roast": 4 twarde punkty z argumentami do negocjacji/weryfikacji dla klienta. Uderz w wady sprzętu, wymuś sprawdzenie grubości kabli, zabezpieczeń.
                 """
                 
                 try:
@@ -175,8 +170,14 @@ with tab1:
                     teaser = wynik_json.get("teaser", "Zidentyfikowano sprzęt. Analiza gotowa.")
                     pdf_roast = wynik_json.get("pdf_roast", "Brak szczegółów sprzętowych.")
 
+                    # L3 PATCH: Sanityzacja danych JSON (Sklejanie listy w string)
+                    if isinstance(pdf_roast, list):
+                        pdf_roast = "\n".join([f"• {item}" for item in pdf_roast])
+                    elif isinstance(pdf_roast, str):
+                        pdf_roast = pdf_roast.strip()
+
                     # Zapisujemy twarde argumenty dla PDF
-                    st.session_state.ai_roast = pdf_roast
+                    st.session_state.ai_roast = str(pdf_roast)
 
                     # Ekran: Suchy, analityczny teaser
                     st.warning("⚠️ **WSTĘPNY WERDYKT SYSTEMU:**")
@@ -185,7 +186,7 @@ with tab1:
                     st.error("🔒 **SZCZEGÓŁOWY RAPORT I ARGUMENTY DO NEGOCJACJI UKRYTE**")
                     st.info(
                         "Aby otrzymać pełną, inżynieryjną analizę błędów w tej ofercie, przejdź do zakładki **🤖 Kalkulator Strat (na samej górze)**. \n\n"
-                        "Wpisz swój rachunek za prąd, a system wygeneruje twardy raport PDF na Twój adres e-mail."
+                        "Wpisz swój rachunek za prąd, a system wygeneruje twardy, 2-stronicowy raport PDF na Twój adres e-mail."
                     )
                     
                     with open("data/oferty_raport.csv", "a", encoding="utf-8") as f:
