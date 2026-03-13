@@ -216,18 +216,27 @@ with tab2:
 
     col1, col2 = st.columns(2)
     with col1:
-        rachunek = st.number_input("Miesięczny rachunek za prąd (PLN):", min_value=100, max_value=5000, value=400, step=50, key="r_calc")
-        miasto = st.text_input("Miasto / Kod pocztowy:", value="Wrocław", key="m_calc")
+        
+        rachunek = st.number_input("Miesięczny rachunek za prąd (PLN):", min_value=0, max_value=5000, value=0, step=50, key="r_calc")
+        
+        miasto = st.text_input("Miasto / Kod pocztowy:", value="", placeholder="np. Warszawa lub 00-001", key="m_calc")
     with col2:
-        ogrzewanie = st.selectbox("Czym ogrzewasz dom?", ["Pompa ciepła", "Kocioł gazowy / Pellet", "Ogrzewanie elektryczne", "Węgiel / Drewno"], key="o_calc")
-        dach = st.selectbox("Rodzaj dachu:", ["Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_calc")
+        
+        ogrzewanie = st.selectbox("Czym ogrzewasz dom?", ["--- Wybierz ---", "Pompa ciepła", "Kocioł gazowy / Pellet", "Ogrzewanie elektryczne", "Węgiel / Drewno"], key="o_calc")
+        dach = st.selectbox("Rodzaj dachu:", ["--- Wybierz ---", "Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_calc")
 
     if st.button("🤖 Oblicz opłacalność (ROI)"):
-        with st.spinner("System pobiera ceny giełdowe ENTSO-E i wylicza oszczędności..."):
-            
-            # Most pomiędzy zakładkami
-            pv_rule = f"Użyj DOKŁADNIE pv_kwp = {st.session_state.pv_from_tab1}" if "pv_from_tab1" in st.session_state else "Dobierz optymalną moc PV (kWp)"
-            bess_rule = f"Użyj DOKŁADNIE battery_kwh = {st.session_state.bess_from_tab1}" if "bess_from_tab1" in st.session_state else "Dobierz optymalną pojemność magazynu (kWh)"
+        
+        if rachunek == 0 or miasto.strip() == "" or ogrzewanie == "--- Wybierz ---" or dach == "--- Wybierz ---":
+            st.error("⚠️ Błąd: Algorytm to nie jasnowidz. Wpisz swój rzeczywisty rachunek, miasto i rodzaj ogrzewania, abyśmy mogli wyliczyć dokładny profil zużycia.")
+        else:
+            with st.spinner("System pobiera ceny giełdowe ENTSO-E i wylicza oszczędności..."):
+                
+                # Most pomiędzy zakładkami (Zostaje bez zmian)
+                pv_rule = f"Użyj DOKŁADNIE pv_kwp = {st.session_state.pv_from_tab1}" if "pv_from_tab1" in st.session_state else "Dobierz optymalną moc PV (kWp)"
+                bess_rule = f"Użyj DOKŁADNIE battery_kwh = {st.session_state.bess_from_tab1}" if "bess_from_tab1" in st.session_state else "Dobierz optymalną pojemność magazynu (kWh)"
+                
+                # Дальше идет твой prompt = f"""...
 
             prompt = f"""
             Jesteś inżynierem OZE. Klient płaci {rachunek} PLN/mc. Ogrzewanie: {ogrzewanie}. 
