@@ -225,10 +225,10 @@ with tab2:
         miasto = st.text_input("Miasto / Kod pocztowy:", value="", placeholder="np. Warszawa lub 00-001", key="m_calc")
     with col2:
         ogrzewanie = st.selectbox("Czym ogrzewasz dom?", ["--- Wybierz ---", "Pompa ciepła", "Kocioł gazowy / Pellet", "Ogrzewanie elektryczne", "Węgiel / Drewno"], key="o_calc")
-        dach = st.selectbox("Rodzaj dachu:", ["--- Wybierz ---", "Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_calc")
+        
 
     if st.button("🤖 Oblicz opłacalność (ROI)"):
-        if rachunek == 0 or miasto.strip() == "" or ogrzewanie == "--- Wybierz ---" or dach == "--- Wybierz ---":
+        if rachunek == 0 or miasto.strip() == "" or ogrzewanie == "--- Wybierz ---":
             st.error("⚠️ Błąd: Algorytm to nie jasnowidz. Wpisz swój rzeczywisty rachunek, miasto i rodzaj ogrzewania, abyśmy mogli wyliczyć dokładny profil zużycia.")
         else:
             with st.spinner("Matematyczna kalkulacja parametrów i pobieranie danych ENTSO-E..."):
