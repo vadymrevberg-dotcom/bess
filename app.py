@@ -144,19 +144,20 @@ with tab1:
                     mnoznik = 1.0  
 
                 # EFEKT SKALI: Większe instalacje są tańsze w przeliczeniu na jednostkę
+                # EFEKT SKALI: Większe instalacje są tańsze w przeliczeniu na jednostkę
                 if oferta_pv > 9.0:
-                    base_pv_min = 2600
-                    base_pv_max = 3500
+                    base_pv_min = 2200  # Obniżono z 2600
+                    base_pv_max = 2800  # Obniżono z 3500 (Tniemy marżę!)
                 else:
-                    base_pv_min = 3200
-                    base_pv_max = 4500
+                    base_pv_min = 2800
+                    base_pv_max = 3800
 
                 if oferta_bess > 15.0:
-                    base_bess_min = 650  # Duże bloki Deye 16kWh są radykalnie tańsze
-                    base_bess_max = 1100
+                    base_bess_min = 550   # Deye 16kWh latają po 7-8k netto
+                    base_bess_max = 750   # Max 750 zł za 1 kWh pojemności!
                 else:
-                    base_bess_min = 1200
-                    base_bess_max = 2000
+                    base_bess_min = 1000
+                    base_bess_max = 1600
 
                 if oferta_bess > 0:
                     min_total = ((oferta_pv * base_pv_min) + (oferta_bess * base_bess_min)) * mnoznik
