@@ -116,7 +116,8 @@ with tab1:
         oferta_cena = st.number_input("Cena całkowita brutto (PLN):", min_value=0, max_value=200000, value=0, step=1000)
         oferta_pv = st.number_input("Moc fotowoltaiki z oferty (kWp):", min_value=0.0, max_value=50.0, value=0.0, step=0.5)
         # L3 PATCH: Wybór dachu dla dokładnej wyceny
-        oferta_dach = st.selectbox("Rodzaj dachu (oferta):", ["Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_tab1")
+        # L3 PATCH: Dodano grunt
+        oferta_dach = st.selectbox("Miejsce montażu (oferta):", ["Skośny - blacha", "Skośny - dachówka", "Płaski", "Konstrukcja gruntowa"], key="d_tab1")
     with col_o2:
         oferta_bess = st.number_input("Pojemność magazynu z oferty (kWh):", min_value=0.0, max_value=50.0, value=0.0, step=1.0)
         oferta_sprzet = st.text_input("Marki sprzętu (Falownik, Panele):", placeholder="np. Deye, panele Jinko 450W")
@@ -131,37 +132,49 @@ with tab1:
                 st.session_state.bess_from_tab1 = oferta_bess
 
                 # L3 PATCH: Detektor klasy sprzętu i korekta rynkowa 2026
+                # L3 PATCH: Detektor klasy sprzętu i nieliniowa korekta rynkowa 2026
                 sprzet_lower = oferta_sprzet.lower()
                 mnoznik = 1.0
                 
-                # Klasyfikacja marek
                 if any(brand in sprzet_lower for brand in ["victron", "sma", "solaredge", "enphase", "fronius"]):
-                    mnoznik = 1.3  # Premium: +30% do ceny
+                    mnoznik = 1.3  
                 elif any(brand in sprzet_lower for brand in ["deye", "hypontech", "solis", "fox", "foxess", "aiswei"]):
-                    mnoznik = 0.85 # Budżet: -15% od ceny
+                    mnoznik = 0.85 
                 else:
-                    mnoznik = 1.0  # Średnia półka (Huawei, Growatt, GoodWe, Alpha ESS itp.)
+                    mnoznik = 1.0  
 
-                # Obniżone, realne ceny bazowe dla rynku zrzutowego
-                base_pv_min = 3200
-                base_pv_max = 4500
-                base_bess_min = 1200
-                base_bess_max = 2000
+                # EFEKT SKALI: Większe instalacje są tańsze w przeliczeniu na jednostkę
+                if oferta_pv > 9.0:
+                    base_pv_min = 2600
+                    base_pv_max = 3500
+                else:
+                    base_pv_min = 3200
+                    base_pv_max = 4500
+
+                if oferta_bess > 15.0:
+                    base_bess_min = 650  # Duże bloki Deye 16kWh są radykalnie tańsze
+                    base_bess_max = 1100
+                else:
+                    base_bess_min = 1200
+                    base_bess_max = 2000
 
                 if oferta_bess > 0:
                     min_total = ((oferta_pv * base_pv_min) + (oferta_bess * base_bess_min)) * mnoznik
                     max_total = ((oferta_pv * base_pv_max) + (oferta_bess * base_bess_max)) * mnoznik
                 else:
-                    min_total = (oferta_pv * 2800) * mnoznik
-                    max_total = (oferta_pv * 3800) * mnoznik
+                    min_total = (oferta_pv * base_pv_min) * mnoznik
+                    max_total = (oferta_pv * base_pv_max) * mnoznik
 
-                # Detektor dachu (Korekta kosztów montażu)
+                # Detektor miejsca montażu (Korekta kosztów)
                 if oferta_dach == "Skośny - dachówka":
                     min_total += 2500
-                    max_total += 3000
+                    max_total += 3500
                 elif oferta_dach == "Płaski":
                     min_total += 3500
-                    max_total += 4500
+                    max_total += 5000
+                elif oferta_dach == "Konstrukcja gruntowa":
+                    min_total += 4500
+                    max_total += 6500
 
                 if oferta_cena > max_total:
                     stan_oferty = f"OFERTA ZAWYŻONA. Klient przepłaca od {oferta_cena - max_total:.0f} do {oferta_cena - min_total:.0f} PLN w stosunku do realnych cen hurtowych i uczciwej marży."
