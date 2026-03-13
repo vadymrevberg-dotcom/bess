@@ -92,7 +92,7 @@ def simulate_with_battery(
     consumption_series: pd.Series,
     battery_kwh: float,
     efficiency: float = 0.9,
-    distribution_cost_kwh: float = 0.45,
+    distribution_cost_kwh: float = 0.60,
 ) -> float:
     df = prices_df.copy()
     profit = 0.0
