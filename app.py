@@ -115,6 +115,8 @@ with tab1:
     with col_o1:
         oferta_cena = st.number_input("Cena całkowita brutto (PLN):", min_value=0, max_value=200000, value=0, step=1000)
         oferta_pv = st.number_input("Moc fotowoltaiki z oferty (kWp):", min_value=0.0, max_value=50.0, value=0.0, step=0.5)
+        # L3 PATCH: Wybór dachu dla dokładnej wyceny
+        oferta_dach = st.selectbox("Rodzaj dachu (oferta):", ["Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_tab1")
     with col_o2:
         oferta_bess = st.number_input("Pojemność magazynu z oferty (kWh):", min_value=0.0, max_value=50.0, value=0.0, step=1.0)
         oferta_sprzet = st.text_input("Marki sprzętu (Falownik, Panele):", placeholder="np. Deye, panele Jinko 450W")
@@ -125,7 +127,6 @@ with tab1:
         else:
             with st.spinner("Skanowanie bazy cen hurtowych i weryfikacja podzespołów..."):
                 
-                # Zapisz w pamięci (Most do Tab 2)
                 st.session_state.pv_from_tab1 = oferta_pv
                 st.session_state.bess_from_tab1 = oferta_bess
 
@@ -136,6 +137,14 @@ with tab1:
                 else:
                     min_total = oferta_pv * 3000
                     max_total = oferta_pv * 3800
+
+                # L3 PATCH: Detektor dachu (Korekta kosztów montażu)
+                if oferta_dach == "Skośny - dachówka":
+                    min_total += 2500
+                    max_total += 3000
+                elif oferta_dach == "Płaski":
+                    min_total += 3500
+                    max_total += 4500
 
                 if oferta_cena > max_total:
                     stan_oferty = f"OFERTA ZAWYŻONA. Klient przepłaca od {oferta_cena - max_total:.0f} do {oferta_cena - min_total:.0f} PLN w stosunku do realnych cen hurtowych i uczciwej marży."
@@ -165,21 +174,17 @@ with tab1:
                         temperature=0.1
                     )
 
-                    # Parsowanie JSON z AI
                     wynik_json = json.loads(response.choices[0].message.content)
                     teaser = wynik_json.get("teaser", "Zidentyfikowano sprzęt. Analiza gotowa.")
                     pdf_roast = wynik_json.get("pdf_roast", "Brak szczegółów sprzętowych.")
 
-                    # L3 PATCH: Sanityzacja danych JSON (Sklejanie listy w string)
                     if isinstance(pdf_roast, list):
                         pdf_roast = "\n".join([f"• {item}" for item in pdf_roast])
                     elif isinstance(pdf_roast, str):
                         pdf_roast = pdf_roast.strip()
 
-                    # Zapisujemy twarde argumenty dla PDF
                     st.session_state.ai_roast = str(pdf_roast)
 
-                    # Ekran: Suchy, analityczny teaser
                     st.warning("⚠️ **WSTĘPNY WERDYKT SYSTEMU:**")
                     st.markdown(teaser)
                     
@@ -216,93 +221,90 @@ with tab2:
 
     col1, col2 = st.columns(2)
     with col1:
-        
         rachunek = st.number_input("Miesięczny rachunek za prąd (PLN):", min_value=0, max_value=5000, value=0, step=50, key="r_calc")
-        
         miasto = st.text_input("Miasto / Kod pocztowy:", value="", placeholder="np. Warszawa lub 00-001", key="m_calc")
     with col2:
-        
         ogrzewanie = st.selectbox("Czym ogrzewasz dom?", ["--- Wybierz ---", "Pompa ciepła", "Kocioł gazowy / Pellet", "Ogrzewanie elektryczne", "Węgiel / Drewno"], key="o_calc")
         dach = st.selectbox("Rodzaj dachu:", ["--- Wybierz ---", "Skośny - blacha", "Skośny - dachówka", "Płaski"], key="d_calc")
 
     if st.button("🤖 Oblicz opłacalność (ROI)"):
-        
         if rachunek == 0 or miasto.strip() == "" or ogrzewanie == "--- Wybierz ---" or dach == "--- Wybierz ---":
             st.error("⚠️ Błąd: Algorytm to nie jasnowidz. Wpisz swój rzeczywisty rachunek, miasto i rodzaj ogrzewania, abyśmy mogli wyliczyć dokładny profil zużycia.")
         else:
-            with st.spinner("System pobiera ceny giełdowe ENTSO-E i wylicza oszczędności..."):
+            with st.spinner("Matematyczna kalkulacja parametrów i pobieranie danych ENTSO-E..."):
                 
-                # Most pomiędzy zakładkami (Zostaje bez zmian)
-                pv_rule = f"Użyj DOKŁADNIE pv_kwp = {st.session_state.pv_from_tab1}" if "pv_from_tab1" in st.session_state else "Dobierz optymalną moc PV (kWp)"
-                bess_rule = f"Użyj DOKŁADNIE battery_kwh = {st.session_state.bess_from_tab1}" if "bess_from_tab1" in st.session_state else "Dobierz optymalną pojemność magazynu (kWh)"
-                
-                # Дальше идет твой prompt = f"""...
+                # L4 PATCH: Twarda matematyka zamiast AI
+                szacowana_cena_kwh = 1.15
+                annual_kwh = int((rachunek * 12) / szacowana_cena_kwh)
 
-            prompt = f"""
-            Jesteś inżynierem OZE. Klient płaci {rachunek} PLN/mc. Ogrzewanie: {ogrzewanie}. 
-            Oszacuj zużycie roczne w kWh. 
-            {pv_rule}.
-            {bess_rule}.
-            Profil: "G12" jeśli pompa ciepła/elektryczne, inaczej "G11".
-            ZWRÓĆ TYLKO JSON: {{"annual_kwh": int, "pv_kwp": float, "battery_kwh": float, "profile": string}}
-            """
-            
-            try:
-                response = ai_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1
-                )
-                ai_data = json.loads(response.choices[0].message.content.replace('```json', '').replace('```', '').strip())
+                if ogrzewanie in ["Pompa ciepła", "Ogrzewanie elektryczne"]:
+                    profile_name = "G12"
+                else:
+                    profile_name = "G11"
+
+                # L4 PATCH: Detektor Przewymiarowania (SCAM)
+                if "pv_from_tab1" in st.session_state and st.session_state.pv_from_tab1 > 0:
+                    pv_kwp = float(st.session_state.pv_from_tab1)
+                    battery_kwh = float(st.session_state.bess_from_tab1)
+
+                    szacowana_produkcja = pv_kwp * 1000
+                    if szacowana_produkcja > (annual_kwh * 1.3): # Tolerancja 30%
+                        st.session_state.scam_alert = f"🚨 KRYTYCZNE OSTRZEŻENIE: Instalacja jest drastycznie przewymiarowana! Twój dom zużywa ok. {annual_kwh} kWh rocznie, a handlowiec wciska Ci {pv_kwp} kWp (produkcja ok. {szacowana_produkcja:.0f} kWh). Na taryfach dynamicznych RCE nadmiar energii latem sprzedasz za grosze. Żądaj zmniejszenia instalacji, zaoszczędzisz co najmniej kilkanaście tysięcy złotych od razu!"
+                    else:
+                        st.session_state.scam_alert = ""
+                else:
+                    pv_kwp = round((annual_kwh / 1000) * 1.15, 1)
+                    battery_kwh = round(pv_kwp * 1.2, 1)
+                    st.session_state.scam_alert = ""
+
+                ai_data = {
+                    "annual_kwh": annual_kwh,
+                    "pv_kwp": pv_kwp,
+                    "battery_kwh": battery_kwh,
+                    "profile": profile_name
+                }
                 st.session_state.ai_params = ai_data
-            except Exception as e:
-                st.error("Błąd tłumaczenia AI.")
-                st.stop()
 
-            # --- MATH ENTSO-E ---
-            annual_kwh = ai_data["annual_kwh"]
-            pv_kwp = ai_data["pv_kwp"]
-            battery_kwh = ai_data["battery_kwh"]
-            profile_name = ai_data["profile"]
-            
-            try:
-                consumption = load_consumption_profile(profile_name=profile_name, annual_kwh=annual_kwh).loc[day_prices.index]
-            except Exception as e:
-                consumption = load_consumption_profile(profile_name="G11", annual_kwh=annual_kwh).loc[day_prices.index]
+                # --- MATH ENTSO-E ---
+                try:
+                    consumption = load_consumption_profile(profile_name=profile_name, annual_kwh=annual_kwh).loc[day_prices.index]
+                except Exception as e:
+                    consumption = load_consumption_profile(profile_name="G11", annual_kwh=annual_kwh).loc[day_prices.index]
 
-            pv_generation = PV_PROFILE * pv_kwp * PV_KWH_PER_KWP_DAY
-            pv_generation = pv_generation.loc[day_prices.index]
-            self_consumed = consumption.clip(upper=pv_generation)
-            remaining_consumption = consumption - self_consumed
-            pv_excess = pv_generation - self_consumed
+                pv_generation = PV_PROFILE * pv_kwp * PV_KWH_PER_KWP_DAY
+                pv_generation = pv_generation.loc[day_prices.index]
+                self_consumed = consumption.clip(upper=pv_generation)
+                remaining_consumption = consumption - self_consumed
+                pv_excess = pv_generation - self_consumed
 
-            battery_charge_from_pv = min(pv_excess.sum(), battery_kwh)
-            
-            if remaining_consumption.sum() > 0 and battery_charge_from_pv > 0:
-                battery_used = (remaining_consumption / remaining_consumption.sum()) * battery_charge_from_pv
-                grid_consumption = remaining_consumption - battery_used
-            else:
-                grid_consumption = remaining_consumption
+                battery_charge_from_pv = min(pv_excess.sum(), battery_kwh)
+                
+                if remaining_consumption.sum() > 0 and battery_charge_from_pv > 0:
+                    battery_used = (remaining_consumption / remaining_consumption.sum()) * battery_charge_from_pv
+                    grid_consumption = remaining_consumption - battery_used
+                else:
+                    grid_consumption = remaining_consumption
 
-            num_days = len(last_30_dates)
-            cost_no_battery_period = simulate_without_battery_30d(df_30d, remaining_consumption, 0.45)
-            cost_pv_battery_period = simulate_without_battery_30d(df_30d, grid_consumption, 0.45)
+                num_days = len(last_30_dates)
+                # L3 PATCH: Współczynnik dystrybucji podniesiony z 0.45 na 0.60
+                cost_no_battery_period = simulate_without_battery_30d(df_30d, remaining_consumption, 0.60)
+                cost_pv_battery_period = simulate_without_battery_30d(df_30d, grid_consumption, 0.60)
 
-            available_for_arbitrage = max(0, battery_kwh - battery_charge_from_pv)
-            arbitrage_profit_period = simulate_with_battery_30d(df_30d, grid_consumption, available_for_arbitrage, EFFICIENCY, 0.45)
+                available_for_arbitrage = max(0, battery_kwh - battery_charge_from_pv)
+                arbitrage_profit_period = simulate_with_battery_30d(df_30d, grid_consumption, available_for_arbitrage, EFFICIENCY, 0.60)
 
-            cost_with_battery_period = cost_pv_battery_period - arbitrage_profit_period
-            profit_battery_period = cost_no_battery_period - cost_with_battery_period
+                cost_with_battery_period = cost_pv_battery_period - arbitrage_profit_period
+                profit_battery_period = cost_no_battery_period - cost_with_battery_period
 
-            st.session_state.financials = {
-                "pv_generation": pv_generation,
-                "consumption": consumption,
-                "cost_no_battery_daily": cost_no_battery_period / num_days,
-                "cost_with_battery_daily": cost_with_battery_period / num_days,
-                "profit_battery_daily": profit_battery_period / num_days,
-                "waiting_cost": compute_waiting_cost(profit_battery_period / num_days, 6)
-            }
-            st.session_state.calculated = True
+                st.session_state.financials = {
+                    "pv_generation": pv_generation,
+                    "consumption": consumption,
+                    "cost_no_battery_daily": cost_no_battery_period / num_days,
+                    "cost_with_battery_daily": cost_with_battery_period / num_days,
+                    "profit_battery_daily": profit_battery_period / num_days,
+                    "waiting_cost": compute_waiting_cost(profit_battery_period / num_days, 6)
+                }
+                st.session_state.calculated = True
 
     if st.session_state.calculated:
         p = st.session_state.ai_params
@@ -334,8 +336,11 @@ with tab2:
                         "expensive_hours": day_prices["price_pln_mwh"].nlargest(3).index.tolist()
                     }
                     
-                    # L3 PATCH: Pobieranie pełnego werdyktu AI do PDF
+                    # L3 PATCH: Wstrzyknięcie Detektora Scamu do PDF
                     ai_roast_text = st.session_state.get("ai_roast", "Kalkulacja wykonana od zera. Brak parametrów z oferty instalatora do weryfikacji.")
+                    scam_alert = st.session_state.get("scam_alert", "")
+                    if scam_alert != "":
+                        ai_roast_text = f"{scam_alert}\n\n" + ai_roast_text
                     
                     output_pdf = f"data/audyt_{uuid.uuid4().hex[:8]}.pdf"
                     generate_pdf_report(
