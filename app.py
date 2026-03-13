@@ -130,15 +130,32 @@ with tab1:
                 st.session_state.pv_from_tab1 = oferta_pv
                 st.session_state.bess_from_tab1 = oferta_bess
 
-                # L3: Twarda matematyka w Pythonie
-                if oferta_bess > 0:
-                    min_total = (oferta_pv * 4000) + (oferta_bess * 1500)
-                    max_total = (oferta_pv * 5500) + (oferta_bess * 2500)
+                # L3 PATCH: Detektor klasy sprzętu i korekta rynkowa 2026
+                sprzet_lower = oferta_sprzet.lower()
+                mnoznik = 1.0
+                
+                # Klasyfikacja marek
+                if any(brand in sprzet_lower for brand in ["victron", "sma", "solaredge", "enphase", "fronius"]):
+                    mnoznik = 1.3  # Premium: +30% do ceny
+                elif any(brand in sprzet_lower for brand in ["deye", "hypontech", "solis", "fox", "foxess", "aiswei"]):
+                    mnoznik = 0.85 # Budżet: -15% od ceny
                 else:
-                    min_total = oferta_pv * 3000
-                    max_total = oferta_pv * 3800
+                    mnoznik = 1.0  # Średnia półka (Huawei, Growatt, GoodWe, Alpha ESS itp.)
 
-                # L3 PATCH: Detektor dachu (Korekta kosztów montażu)
+                # Obniżone, realne ceny bazowe dla rynku zrzutowego
+                base_pv_min = 3200
+                base_pv_max = 4500
+                base_bess_min = 1200
+                base_bess_max = 2000
+
+                if oferta_bess > 0:
+                    min_total = ((oferta_pv * base_pv_min) + (oferta_bess * base_bess_min)) * mnoznik
+                    max_total = ((oferta_pv * base_pv_max) + (oferta_bess * base_bess_max)) * mnoznik
+                else:
+                    min_total = (oferta_pv * 2800) * mnoznik
+                    max_total = (oferta_pv * 3800) * mnoznik
+
+                # Detektor dachu (Korekta kosztów montażu)
                 if oferta_dach == "Skośny - dachówka":
                     min_total += 2500
                     max_total += 3000
